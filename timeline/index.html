@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FFLogs 时间轴导出工具</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<style>
+  :root{
+    --bg:#f5f6f8;
+    --card:#ffffff;
+    --border:#e3e6ec;
+    --text:#1c2230;
+    --text-muted:#6b7280;
+    --primary:#3366ff;
+    --primary-dark:#274bcc;
+    --success:#1e8e5a;
+    --success-bg:#e7f6ee;
+    --warning:#b3720a;
+    --warning-bg:#fdf3e0;
+    --danger:#c8382c;
+    --danger-bg:#fdecea;
+    --info:#2f6fed;
+    --info-bg:#eaf1ff;
+    --chip-bg:#eef1f6;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei UI",system-ui,sans-serif;
+    font-size:14px;
+    line-height:1.5;
+  }
+  #app{max-width:1180px;margin:0 auto;padding:24px 20px 100px;}
+
+  .page-header{margin-bottom:20px;}
+  .page-header h1{font-size:22px;font-weight:700;margin:0 0 4px;}
+  .page-header p{color:var(--text-muted);margin:0;font-size:13px;}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px 18px;
+    margin-bottom:16px;
+  }
+  .card-title{font-size:14px;font-weight:700;margin:0 0 10px;display:flex;align-items:center;gap:8px;}
+
+  button{
+    font-family:inherit;
+    font-size:13px;
+    border-radius:7px;
+    border:1px solid var(--border);
+    background:#fff;
+    color:var(--text);
+    padding:8px 14px;
+    cursor:pointer;
+    transition:background .12s,border-color .12s,opacity .12s;
+  }
+  button:hover:not(:disabled){border-color:var(--primary);color:var(--primary);}
+  button:disabled{opacity:.45;cursor:not-allowed;}
+  button.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+  button.primary:hover:not(:disabled){background:var(--primary-dark);color:#fff;}
+  button.success{background:var(--success);border-color:var(--success);color:#fff;}
+  button.success:hover:not(:disabled){opacity:.88;color:#fff;}
+  button.ghost{background:transparent;}
+  button.small{padding:4px 10px;font-size:12px;}
+
+  input[type=text],input[type=password],input[type=url]{
+    font-family:inherit;
+    font-size:13px;
+    border:1px solid var(--border);
+    border-radius:7px;
+    padding:8px 10px;
+    width:100%;
+    background:#fff;
+    color:var(--text);
+  }
+  input:focus,button:focus{outline:2px solid var(--primary);outline-offset:1px;}
+  label.field-label{font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px;}
+
+  .url-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;}
+  .url-row .field{flex:1;min-width:260px;}
+
+  .status-line{font-size:12.5px;margin-top:8px;min-height:16px;}
+  .tone-blue{color:var(--info);}
+  .tone-green{color:var(--success);}
+  .tone-red{color:var(--danger);}
+
+  .player-columns{display:flex;gap:14px;flex-wrap:wrap;}
+  .player-col{flex:1;min-width:240px;background:#fbfbfd;border:1px solid var(--border);border-radius:8px;padding:12px;}
+  .player-col h3{font-size:12.5px;margin:0 0 8px;color:var(--text-muted);font-weight:600;}
+  .player-item{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:13px;}
+  .player-col-actions{margin-top:8px;display:flex;gap:6px;}
+
+  .badge{display:inline-block;font-size:11.5px;padding:2px 9px;border-radius:999px;font-weight:600;}
+  .badge-red{background:var(--danger-bg);color:var(--danger);}
+  .badge-green{background:var(--success-bg);color:var(--success);}
+  .badge-info{background:var(--info-bg);color:var(--info);}
+
+  .chip-row{display:flex;gap:8px;overflow-x:auto;padding:6px 2px 10px;}
+  .chip{
+    display:flex;align-items:center;gap:6px;
+    background:var(--chip-bg);border:1px solid var(--border);
+    border-radius:7px;padding:6px 12px;font-size:12.5px;
+    cursor:grab;white-space:nowrap;user-select:none;flex:none;
+  }
+  .chip.selected{background:var(--primary);border-color:var(--primary);color:#fff;}
+  .chip .idx{font-weight:700;opacity:.6;font-size:11px;}
+  .chip.selected .idx{opacity:.9;}
+  .order-hint{font-size:12px;color:var(--text-muted);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+
+  .skill-group{border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:#fbfbfd;}
+  .skill-group h4{font-size:12.5px;margin:0 0 8px;color:var(--text-muted);font-weight:600;}
+  .skill-grid{display:flex;flex-wrap:wrap;gap:4px 14px;}
+  .skill-item{display:flex;align-items:center;gap:5px;font-size:12.5px;padding:2px 0;min-width:120px;}
+  .skill-item.preselected label{color:var(--primary);font-weight:600;}
+  .skill-scroll{max-height:420px;overflow-y:auto;padding-right:4px;}
+
+  .export-bar{
+    position:sticky;bottom:0;left:0;right:0;
+    background:var(--card);border-top:1px solid var(--border);
+    margin:24px -20px -100px;padding:14px 20px;
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  }
+  .export-bar .statuses{display:flex;gap:16px;flex-wrap:wrap;flex:1;min-width:200px;}
+  .export-bar .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .export-bar input[type=text]{width:180px;}
+
+  .modal-mask{
+    position:fixed;inset:0;background:rgba(20,24,34,.45);
+    display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;
+  }
+  .modal-box{
+    background:#fff;border-radius:12px;max-width:560px;width:100%;
+    max-height:86vh;overflow-y:auto;padding:20px 22px;
+  }
+  .modal-box h2{font-size:16px;margin:0 0 12px;}
+  .modal-box .help-text{font-size:13px;color:var(--text-muted);line-height:1.7;white-space:pre-line;margin-bottom:12px;}
+  .modal-actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;}
+  .close-x{position:absolute;top:14px;right:16px;background:none;border:none;font-size:18px;color:var(--text-muted);cursor:pointer;padding:2px 6px;}
+  .modal-box{position:relative;}
+
+  .settings-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;}
+  .slider-row{display:flex;align-items:center;gap:10px;margin:6px 0 4px;}
+  .slider-row input[type=range]{flex:1;}
+  .slider-row input[type=text]{width:60px;text-align:center;}
+
+  .error-banner{
+    background:var(--danger-bg);color:var(--danger);border:1px solid #f3c6c1;
+    border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;
+    display:flex;justify-content:space-between;gap:10px;align-items:flex-start;
+  }
+  .error-banner button{background:none;border:none;color:var(--danger);font-weight:700;cursor:pointer;}
+
+  .toast{
+    position:fixed;right:20px;bottom:24px;z-index:200;
+    background:#1c2230;color:#fff;padding:10px 16px;border-radius:8px;
+    font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.18);
+    transition:opacity .2s,transform .2s;
+  }
+  .toast.warn{background:var(--warning);}
+  .toast.error{background:var(--danger);}
+  .toast.success{background:var(--success);}
+
+  a{color:var(--primary);}
+
+  .tool-switch-bar{
+    position:sticky;top:0;z-index:60;
+    display:flex;align-items:center;gap:14px;
+    background:#1c2230;color:#fff;
+    padding:8px 20px;font-size:12.5px;
+    flex-wrap:wrap;
+  }
+  .tool-switch-bar a{color:#c7cbe0;text-decoration:none;padding:5px 10px;border-radius:6px;}
+  .tool-switch-bar a:hover{background:rgba(255,255,255,.08);color:#fff;}
+  .tool-switch-bar a.active{background:var(--primary);color:#fff;font-weight:600;}
+  .tool-switch-bar .home-link{opacity:.75;border-right:1px solid rgba(255,255,255,.15);padding-right:14px;margin-right:2px;}
+
+  @media (max-width:640px){
+    #app{padding:16px 12px 100px;}
+    .export-bar{margin:24px -12px -100px;flex-direction:column;align-items:stretch;}
+  }
+</style>
+</head>
+<body>
+<div class="tool-switch-bar">
+  <a class="home-link" href="../index.html">🏠 工具箱首页</a>
+  <a class="active" href="../timeline/index.html">时间轴导出工具</a>
+  <a href="../partner/index.html">谁是你的最佳搭档</a>
+</div>
+<div id="app">
+
+  <div class="page-header">
+    <h1>FFLogs 时间轴导出工具</h1>
+    <p>解析 FFLogs 战报，筛选玩家与技能，导出分析用 CSV 或展示用 HTML 时间轴。</p>
+  </div>
+
+  <div v-if="error" class="error-banner">
+    <span>{{ error }}</span>
+    <button @click="error=''">关闭</button>
+  </div>
+
+  <div class="toolbar">
+    <button @click="showHelpModal=true">0. 帮助</button>
+    <button @click="openConfigModal()">FFLogs API 配置</button>
+    <button @click="showSettingsModal=true">高级设置</button>
+  </div>
+
+  <div class="card">
+    <div class="url-row">
+      <div class="field">
+        <label class="field-label">FFLogs 战报链接（请勿频繁请求，例如 .../reports/xxxx?fight=1 或 ?fight=last）</label>
+        <input type="url" v-model.trim="apiUrl" placeholder="https://cn.fflogs.com/reports/xxxxxxxx?fight=last">
+      </div>
+      <button class="primary" :disabled="isLoading" @click="loadDataFromApi">
+        {{ isLoading ? '解析中…' : '1. 解析日志' }}
+      </button>
+    </div>
+    <div class="status-line" :class="'tone-'+loadingStatus.color" v-if="loadingStatus.text">{{ loadingStatus.text }}</div>
+  </div>
+
+  <div class="card" v-if="activePlayers.length">
+    <div class="card-title">选择统计对象</div>
+    <div class="player-columns">
+      <div class="player-col">
+        <h3>受伤统计对象（建议包含：奶妈、d3）</h3>
+        <div class="player-item" v-for="p in sortedPlayers" :key="'e'+p.id">
+          <input type="checkbox" :id="'ev'+p.id" v-model="checkedEventPlayerIds[p.id]">
+          <label :for="'ev'+p.id">{{ p.name }}（{{ jobCn(p.subType) }}）</label>
+        </div>
+        <div class="player-col-actions">
+          <button class="small" @click="setAllChecks('checkedEventPlayerIds', true)">全选</button>
+          <button class="small ghost" @click="setAllChecks('checkedEventPlayerIds', false)">清空</button>
+        </div>
+      </div>
+      <div class="player-col">
+        <h3>选择施法统计对象</h3>
+        <div class="player-item" v-for="p in sortedPlayers" :key="'c'+p.id">
+          <input type="checkbox" :id="'ca'+p.id" v-model="checkedCastPlayerIds[p.id]">
+          <label :for="'ca'+p.id">{{ p.name }}（{{ jobCn(p.subType) }}）</label>
+        </div>
+        <div class="player-col-actions">
+          <button class="small" @click="setAllChecks('checkedCastPlayerIds', true)">全选</button>
+          <button class="small ghost" @click="setAllChecks('checkedCastPlayerIds', false)">清空</button>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <button class="primary" @click="confirmSelectedPlayers">2. 确认筛选玩家</button>
+    </div>
+  </div>
+
+  <div class="card" v-if="customCastOrder.length">
+    <div class="order-hint">
+      <span>拖拽标签，或选中后点击左移/右移，调整导出时的横向排列顺序</span>
+      <span style="display:flex;gap:6px;">
+        <button class="small" :disabled="selectedCastOrderIndex===null" @click="moveCastOrder(-1)">◀ 左移</button>
+        <button class="small" :disabled="selectedCastOrderIndex===null" @click="moveCastOrder(1)">右移 ▶</button>
+        <button class="small ghost" @click="resetCastOrder">↺ 恢复默认</button>
+      </span>
+    </div>
+    <div class="chip-row">
+      <div
+        class="chip"
+        v-for="(name,i) in customCastOrder"
+        :key="name"
+        :class="{selected:selectedCastOrderIndex===i}"
+        draggable="true"
+        @click="selectedCastOrderIndex=i"
+        @dragstart="onChipDragStart(i,$event)"
+        @dragover.prevent
+        @drop="onChipDrop(i)"
+      >
+        <span class="idx">{{ i+1 }}</span>
+        <span>{{ getPlayerDisplayName(name) }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" v-if="skillGroupEntries.length">
+    <div class="card-title">技能筛选</div>
+    <div class="skill-scroll">
+      <div class="skill-group" v-for="[source, skills] in skillGroupEntries" :key="source">
+        <h4>{{ source }}</h4>
+        <div class="skill-grid">
+          <div
+            class="skill-item"
+            v-for="skillName in Object.keys(skills)"
+            :key="skillName"
+            :class="{preselected: defaultSelectedSkills.has(skillName)}"
+          >
+            <input type="checkbox" :id="'sk'+source+skillName" v-model="skillOptionGroups[source][skillName]">
+            <label :for="'sk'+source+skillName">{{ skillName }}</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;">
+      <button class="primary" @click="filterSkills">3. 筛选所选技能</button>
+      <button class="ghost" @click="clearAllCheckboxes">清空勾选</button>
+    </div>
+  </div>
+
+  <div style="height:8px;"></div>
+
+  <div class="export-bar">
+    <div class="statuses">
+      <span class="badge" :class="statusEvent.tone==='success' ? 'badge-green' : (statusEvent.tone==='info' ? 'badge-info' : 'badge-red')">{{ statusEvent.text }}</span>
+      <span class="badge" :class="statusSkill.tone==='success' ? 'badge-green' : (statusSkill.tone==='info' ? 'badge-info' : 'badge-red')">{{ statusSkill.text }}</span>
+    </div>
+    <div class="actions">
+      <input type="text" v-model.trim="exportTitle" placeholder="导出文件名（默认：时间轴）">
+      <button :disabled="!exportEnabled" @click="mergeAndExport">导出分析用 CSV 表格</button>
+      <button class="success" :disabled="!exportEnabled" @click="exportHtmlTimeline">导出展示用 HTML 时间轴</button>
+    </div>
+  </div>
+
+  <!-- FFLogs API 配置弹窗 -->
+  <div class="modal-mask" v-if="showConfigModal" @click.self="closeConfigModal">
+    <div class="modal-box">
+      <button class="close-x" v-if="isConfigured" @click="closeConfigModal">✕</button>
+      <h2>FFLogs API 配置</h2>
+      <div class="help-text">请在 FFLogs 官网申请个人 API 凭证（免费、步骤简单）：
+
+1. 登录 https://cn.fflogs.com
+2. 进入「我的账号」→「API 客户端」创建客户端
+3. 将生成的 Client ID 与 Client Secret 填入下方并保存
+
+凭证仅保存在你当前浏览器的 localStorage 中，用于向 FFLogs 获取访问令牌，不会上传至本工具之外的任何服务器。</div>
+      <p style="margin:0 0 14px;"><a href="docs/fflogs_api_help/index.html" target="_blank" rel="noopener">📖 查看图文教程：如何申请 FFLogs API →</a></p>
+      <label class="field-label">Client ID</label>
+      <input type="text" v-model.trim="configForm.clientId" style="margin-bottom:10px;">
+      <label class="field-label">Client Secret</label>
+      <input type="password" v-model.trim="configForm.clientSecret">
+      <div class="status-line" :class="'tone-'+configTestStatus.color" v-if="configTestStatus.text">{{ configTestStatus.text }}</div>
+      <div class="modal-actions">
+        <button @click="testFFLogsConnection">测试连接</button>
+        <button class="success" @click="saveFFLogsConfig">保存</button>
+        <button class="ghost" v-if="isConfigured" @click="closeConfigModal">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 高级设置弹窗 -->
+  <div class="modal-mask" v-if="showSettingsModal" @click.self="showSettingsModal=false">
+    <div class="modal-box">
+      <button class="close-x" @click="showSettingsModal=false">✕</button>
+      <h2>高级设置</h2>
+      <label class="field-label">机制聚合时间窗口</label>
+      <div class="slider-row">
+        <input type="range" min="0.1" max="1.5" step="0.1" v-model.number="settings.windowThreshold">
+        <input type="text" :value="settings.windowThreshold.toFixed(1)" readonly>
+      </div>
+      <div class="help-text" style="margin-bottom:14px;">较小的值可能导致同一次机制被拆分，较大的值可能误合并不同机制。建议值：0.5-0.8。
+换句话说如果发现有伤害被吞了，可以尝试调小</div>
+
+      <div class="settings-row"><input type="checkbox" id="optDot" v-model="settings.enableDotSupport"><label for="optDot">显示Dot伤害</label></div>
+      <div class="settings-row"><input type="checkbox" id="optAtk" v-model="settings.enableAttackSupport"><label for="optAtk">显示平A伤害</label></div>
+      <div class="settings-row"><input type="checkbox" id="optActual" v-model="settings.includeActual"><label for="optActual">显示实际伤害</label></div>
+      <div class="settings-row"><input type="checkbox" id="optMit" v-model="settings.includeMitigated"><label for="optMit">显示减伤</label></div>
+      <div class="settings-row"><input type="checkbox" id="optAbs" v-model="settings.includeAbsorbed"><label for="optAbs">显示护盾吸收伤害</label></div>
+
+      <div class="help-text">修改设置后需重新点击【2. 确认筛选玩家】</div>
+      <div class="modal-actions"><button @click="showSettingsModal=false">关闭</button></div>
+    </div>
+  </div>
+
+  <!-- 帮助弹窗 -->
+  <div class="modal-mask" v-if="showHelpModal" @click.self="showHelpModal=false">
+    <div class="modal-box">
+      <button class="close-x" @click="showHelpModal=false">✕</button>
+      <h2>使用说明</h2>
+      <p style="margin:0 0 12px;display:flex;gap:16px;flex-wrap:wrap;">
+        <a href="docs/fflogs_api_help/index.html" target="_blank" rel="noopener">📖 图文教程：如何申请 FFLogs API →</a>
+        <a href="docs/usage_help/index.html" target="_blank" rel="noopener">📖 图文教程：工具使用说明 →</a>
+      </p>
+      <div class="help-text">1. 点击「FFLogs API 配置」，按提示申请并填写 Client ID / Client Secret（一次性，保存在本机浏览器）。
+
+2. 打开 FFLogs 战报页面，复制浏览器地址栏链接，链接需包含具体战斗编号，例如：
+   https://cn.fflogs.com/reports/AbCdEfGh?fight=3
+   也可以用 ?fight=last 表示最后一场战斗。
+
+3. 粘贴链接后点击「1. 解析日志」，等待加载完成。
+
+4. 在「受伤统计对象」和「施法统计对象」中分别勾选需要统计的角色，点击「2. 确认筛选玩家」。
+
+5. 在「技能筛选」中勾选需要展示在时间轴上的技能（蓝色高亮为常用技能，已默认勾选），点击「3. 筛选所选技能」。
+
+6. 点击底部按钮导出 CSV 表格或 HTML 时间轴。
+
+所有数据处理均在你的浏览器本地完成，不会上传到本工具之外的任何服务器。</div>
+      <div class="modal-actions"><button @click="showHelpModal=false">关闭</button></div>
+    </div>
+  </div>
+
+  <div class="toast" v-if="toast.visible" :class="toast.tone">{{ toast.message }}</div>
+
+</div>
+
+<script>
+const { createApp } = Vue;
+
+// ── 常量 ──────────────────────────────────────────────────────────────
+const TOKEN_URL = "https://www.fflogs.com/oauth/token";
+const GRAPHQL_URL = "https://cn.fflogs.com/api/v2/client";
+const TRANSLATION_URL = "./translation.json";
+const CONFIG_STORAGE_KEY = "fflogs_shared_credentials_v1";
+const LEGACY_TIMELINE_KEY = "fflogs_timeline_tool_config_v1";
+const LEGACY_PARTNER_KEY = "fflogs-partner-settings";
+
+const HEALER_JOBS = new Set(["WhiteMage", "Scholar", "Astrologian", "Sage"]);
+const TANK_JOBS = new Set(["Paladin", "Warrior", "DarkKnight", "Gunbreaker"]);
+const DPS_JOBS = new Set([
+  "Monk", "Dragoon", "Ninja", "Samurai", "Reaper", "Viper",
+  "Bard", "Machinist", "Dancer", "BlackMage", "Summoner", "RedMage", "Pictomancer",
+]);
+
+const JOB_NAME_MAP = {
+  Paladin: "骑", Warrior: "战", DarkKnight: "暗", Gunbreaker: "枪",
+  WhiteMage: "白", Scholar: "学", Astrologian: "占", Sage: "贤",
+  Monk: "僧", Dragoon: "龙", Ninja: "忍", Samurai: "侍", Reaper: "镰",
+  Bard: "诗", Machinist: "机", Dancer: "舞", BlackMage: "黑", Summoner: "召",
+  RedMage: "赤", Viper: "蛇", Pictomancer: "画",
+};
+
+const DEFAULT_SELECTED_SKILLS = new Set([
+  "泛输血", "整体论", "魂灵风息", "智慧之爱", "坚角清汁", "均衡预后Ⅱ", "均衡预后", "均衡诊断", "活化", "寄生清汁", "消化", "灵橡清汁", "白牛清汁", "自生Ⅱ", "输血", "预后",
+  "地星", "星体爆轰", "天星冲日", "天宫图", "中间学派", "命运之轮", "大宇宙", "小宇宙", "阳星相位", "阳星", "太阳星座", "王冠之贵妇", "阳星合相", "先天禀赋", "天星交错", "放浪神之箭", "河流神之瓶", "建筑神之塔", "世界树之干",
+  "医治", "医济", "医养", "愈疗", "再生", "安慰之心", "狂喜之心", "法令", "庇护所", "礼仪之铃", "节制", "神爱抚", "全大赦", "神名", "神祝祷", "天赐祝福",
+  "秘策", "展开战术", "炽天召唤", "慰藉", "疾风怒涛之计", "转化", "野战治疗阵", "异想的幻光", "仙光的低语", "异想的祥光", "炽天附体", "天使的低语", "炽天的幻光", "降临之章", "意气轩昂之策", "不屈不挠之策", "鼓舞激励之策", "士气高扬之策", "以太契约", "深谋远虑之策",
+  "雪仇", "摆脱", "圣光幕帘", "光之心", "暗黑布道", "武装戍卫",
+  "昏乱", "牵制", "行吟", "策动", "防守之桑巴",
+  "抗死", "油性坦培拉", "武装解除",
+]);
+
+const TIMELINE_FIXED_COLS = new Set(["时间", "机制", "理论伤害", "实际伤害", "吸收伤害", "减伤"]);
+
+// ── 纯函数：排序 / 时间 / 聚合 ────────────────────────────────────────
+function getJobRolePriority(job) {
+  if (HEALER_JOBS.has(job)) return 0;
+  if (TANK_JOBS.has(job)) return 1;
+  if (DPS_JOBS.has(job)) return 2;
+  return 3;
+}
+
+function sortPlayersByRole(players) {
+  return players
+    .map((p, i) => [p, i])
+    .sort((a, b) => {
+      const pa = getJobRolePriority(a[0].subType);
+      const pb = getJobRolePriority(b[0].subType);
+      return pa !== pb ? pa - pb : a[1] - b[1];
+    })
+    .map((x) => x[0]);
+}
+
+function sortSourceNamesByPlayerRole(sourceNames, players) {
+  const sourceSet = new Set(sourceNames);
+  const ordered = [];
+  for (const p of sortPlayersByRole(players)) {
+    if (sourceSet.has(p.name) && !ordered.includes(p.name)) ordered.push(p.name);
+  }
+  const remaining = [...sourceSet].filter((n) => !ordered.includes(n)).sort();
+  ordered.push(...remaining);
+  return ordered;
+}
+
+function timeToSeconds(t) {
+  const parts = String(t).split(":");
+  if (parts.length === 2) return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+  if (parts.length === 3) return parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]);
+  return 0;
+}
+
+function formatTime(sec) {
+  const minutes = Math.floor(sec / 60);
+  const seconds = sec - minutes * 60;
+  let secStr = seconds.toFixed(3);
+  if (seconds < 10) secStr = "0" + secStr;
+  return `${String(minutes).padStart(2, "0")}:${secStr}`;
+}
+
+function processApiData(dataRows, opts) {
+  const {
+    enableDotSupport = true,
+    enableAttackSupport = false,
+    includeActual = true,
+    includeMitigated = true,
+    includeTheoretical = true,
+    includeAbsorbed = false,
+  } = opts || {};
+  const filtered = [];
+  for (const row of dataRows) {
+    const eventName = row.Event || "";
+    if (!eventName) continue;
+    if (!enableAttackSupport && (eventName === "攻击" || eventName === "Attack" || eventName === "攻撃")) continue;
+    if (!enableDotSupport && (eventName.includes("DoTs") || eventName.includes("Environment") || eventName.includes("Tick"))) continue;
+
+    const newRow = { Time: row.Time || "", Event: eventName };
+    if (includeTheoretical) newRow.Damage = row.Damage ?? 0;
+    if (includeActual) newRow.Actual = row.Actual ?? 0;
+    if (includeMitigated) newRow.Mitigated = row.Mitigated ?? 0;
+    if (includeAbsorbed) newRow.Absorbed = row.Absorbed ?? 0;
+    filtered.push(newRow);
+  }
+  return filtered;
+}
+
+function slidingWindowAggregate(events, window) {
+  const result = [];
+  for (const row of events) {
+    const time = row.Time;
+    const event = row.Event;
+    const damage = row.Damage ?? 0;
+    const actual = row.Actual ?? 0;
+    const absorbed = row.Absorbed ?? 0;
+    const timeSec = timeToSeconds(time);
+
+    let merged = false;
+    for (const existing of result) {
+      if (existing.Event === event) {
+        const existingSec = timeToSeconds(existing.Time);
+        if (Math.abs(existingSec - timeSec) <= window) {
+          existing.Damage = Math.max(existing.Damage ?? 0, damage);
+          existing.Actual = Math.max(existing.Actual ?? 0, actual);
+          existing.Absorbed = Math.max(existing.Absorbed ?? 0, absorbed);
+          if (time < existing.Time) existing.Time = time;
+          merged = true;
+          break;
+        }
+      }
+    }
+    if (!merged) result.push({ ...row });
+  }
+  return result.sort((a, b) => timeToSeconds(a.Time) - timeToSeconds(b.Time));
+}
+
+// ── FFLogs API ────────────────────────────────────────────────────────
+function parseFFLogsUrl(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("URL 格式不正确");
+  }
+  const parts = parsed.pathname.replace(/^\/+|\/+$/g, "").split("/");
+  if (parts.length < 2 || parts[0] !== "reports") {
+    throw new Error("URL路径格式异常，无法提取report_code");
+  }
+  const reportCode = parts[1];
+
+  const fightParam = parsed.searchParams.get("fight");
+  let fightId = null;
+  if (fightParam) {
+    const f = fightParam.trim().toLowerCase();
+    if (f === "last") {
+      fightId = "last";
+    } else {
+      const n = parseInt(f, 10);
+      fightId = Number.isNaN(n) ? null : n;
+    }
+  }
+  return { reportCode, fightId };
+}
+
+async function fetchFightsList(gqlFn, reportCode) {
+  const query = `{
+    reportData {
+      report(code: "${reportCode}") {
+        fights { id startTime endTime }
+      }
+    }
+  }`;
+  const data = await gqlFn(query);
+  const fights = data?.reportData?.report?.fights || [];
+  if (!fights.length) throw new Error(`报告 ${reportCode} 中没有找到 fight 列表`);
+  return fights;
+}
+
+function resolveLastFightId(fights) {
+  const sorted = [...fights].sort((a, b) => (a.startTime || 0) - (b.startTime || 0));
+  return sorted[sorted.length - 1].id;
+}
+
+async function queryEventData(gqlFn, reportCode, fightId, dataType, fights) {
+  let allEvents = [];
+  let nextPage = null;
+  const fight = fights.find((f) => f.id === fightId);
+  const fightStart = fight ? fight.startTime : 0;
+  const fightEnd = fight ? fight.endTime : 0;
+
+  while (true) {
+    const startClause = nextPage ? `, startTime: ${nextPage + 1}` : `, startTime: ${fightStart}`;
+    const endClause = `, endTime: ${fightEnd}`;
+    const query = `{
+      reportData {
+        report(code: "${reportCode}") {
+          events(fightIDs: [${fightId}], dataType: ${dataType}${startClause}${endClause}) {
+            data
+            nextPageTimestamp
+          }
+        }
+      }
+    }`;
+    const data = await gqlFn(query);
+    const eventsBlock = data?.reportData?.report?.events;
+    if (!eventsBlock) break;
+    allEvents = allEvents.concat(eventsBlock.data || []);
+    nextPage = eventsBlock.nextPageTimestamp;
+    if (!nextPage || nextPage >= fightEnd) break;
+  }
+  return allEvents;
+}
+
+async function queryFirstDamage(gqlFn, reportCode, fightId) {
+  const query = `{
+    reportData {
+      report(code: "${reportCode}") {
+        events(
+          dataType: DamageDone,
+          fightIDs: [${fightId}],
+          limit: 1,
+          filterExpression: "type = 'damage'"
+        ) { data }
+      }
+    }
+  }`;
+  const data = await gqlFn(query);
+  return data?.reportData?.report?.events?.data || [];
+}
+
+async function queryIdData(gqlFn, reportCode) {
+  const query = `{
+    reportData {
+      report(code: "${reportCode}") {
+        masterData {
+          actors { id name type subType }
+          abilities { gameID name }
+        }
+      }
+    }
+  }`;
+  const data = await gqlFn(query);
+  return data?.reportData?.report?.masterData || { actors: [], abilities: [] };
+}
+
+function formatTimestamp(ms) {
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  const milliseconds = ((ms % 1000) + 1000) % 1000;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(milliseconds).padStart(3, "0")}`;
+}
+
+function getStartTimestamp(damageList) {
+  const sorted = [...damageList].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  for (const e of sorted) {
+    if (e.type === "damage") return e.timestamp;
+  }
+  return 0;
+}
+
+function transformEvents(events, abilityMap, actorMap, baseTimestamp) {
+  if (!events || !events.length) return [];
+  const base = baseTimestamp != null ? baseTimestamp : (events[0].timestamp || 0);
+  const result = [];
+  for (const event of events) {
+    if (event.type !== "damage") continue;
+    const ts = event.timestamp || 0;
+    const abilityId = event.abilityGameID;
+    const name = abilityMap[abilityId] || `ID:${abilityId}`;
+    const targetName = actorMap[event.targetID] || `ID:${event.targetID}`;
+    result.push({
+      Time: formatTimestamp(ts - base),
+      Event: name,
+      Target: targetName,
+      Damage: event.unmitigatedAmount || 0,
+      Actual: event.amount || 0,
+      Absorbed: event.absorbed || 0,
+      Mitigated: Math.round((1 - (event.multiplier ?? 1)) * 100 * 100) / 100,
+    });
+  }
+  return result;
+}
+
+function transformCasts(events, actorMap, abilityMap) {
+  if (!events || !events.length) return [];
+  const firstTimestamp = events[0].timestamp;
+  const result = [];
+  for (const event of events) {
+    if (event.type !== "cast") continue;
+    const timeStr = formatTimestamp(event.timestamp - firstTimestamp);
+    const source = actorMap[event.sourceID] || `ID:${event.sourceID}`;
+    const target = actorMap[event.targetID] || `ID:${event.targetID}`;
+    const ability = abilityMap[event.abilityGameID] || `ID:${event.abilityGameID}`;
+    result.push({ Time: timeStr, Source: source, Target: target, Skill: ability });
+  }
+  return result;
+}
+
+async function getAllFromApi(gqlFn, url) {
+  const { reportCode, fightId: rawFightId } = parseFFLogsUrl(url);
+  const fights = await fetchFightsList(gqlFn, reportCode);
+  const fightId = rawFightId === "last" ? resolveLastFightId(fights) : rawFightId;
+
+  const eventList = await queryEventData(gqlFn, reportCode, fightId, "DamageTaken", fights);
+  const castsList = await queryEventData(gqlFn, reportCode, fightId, "Casts", fights);
+  const damageList = await queryFirstDamage(gqlFn, reportCode, fightId);
+  const masterData = await queryIdData(gqlFn, reportCode);
+
+  const abilities = masterData.abilities || [];
+  const actors = masterData.actors || [];
+  const abilityMap = {};
+  abilities.forEach((a) => { abilityMap[a.gameID] = a.name; });
+  const actorMap = {};
+  actors.forEach((a) => { actorMap[a.id] = a.name; });
+
+  const baseTs = getStartTimestamp(damageList);
+  const eventResult = transformEvents(eventList, abilityMap, actorMap, baseTs);
+  const castResult = transformCasts(castsList, actorMap, abilityMap);
+
+  const players = actors.filter((a) => a.type === "Player");
+  const activePlayerIds = new Set(castsList.filter((e) => e.type === "cast").map((e) => e.sourceID));
+  const activePlayers = players.filter((p) => activePlayerIds.has(p.id));
+
+  return { eventResult, castResult, activePlayers };
+}
+
+async function loadTranslationMap() {
+  try {
+    const resp = await fetch(TRANSLATION_URL, { cache: "no-store" });
+    if (!resp.ok) throw new Error("translation fetch failed");
+    const data = await resp.json();
+    return data && typeof data === "object" ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+// ── HTML 时间轴导出（对应 timeline_to_html.py 的 build_html）───────────
+function isBlank(v) {
+  if (v === null || v === undefined) return true;
+  const s = String(v).trim();
+  return s === "" || s.toLowerCase() === "nan";
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function getSkillColumns(fieldnames) {
+  return fieldnames.filter((c) => !TIMELINE_FIXED_COLS.has(c));
+}
+
+function buildTimelineHtml(rows, fieldnames, title) {
+  const skillCols = getSkillColumns(fieldnames);
+  const palette = [
+    ["#EAF3DE", "#27500A", "#97C459"], ["#E6F1FB", "#0C447C", "#85B7EB"], ["#F5F3FF", "#4C1D95", "#A78BFA"],
+    ["#FFF7ED", "#7C2D12", "#FB923C"], ["#F0FDFA", "#134E4A", "#5EEAD4"], ["#FDF4FF", "#581C87", "#D946EF"],
+    ["#FFF1F2", "#881337", "#FDA4AF"], ["#FFFBEB", "#78350F", "#FCD34D"], ["#F0F9FF", "#0C4A6E", "#7DD3FC"],
+    ["#FFF0F6", "#831843", "#F9A8D4"], ["#F0FDF4", "#14532D", "#86EFAC"], ["#FDF2F8", "#701A75", "#E879F9"],
+  ];
+  const colColors = {};
+  skillCols.forEach((col, i) => { colColors[col] = palette[i % palette.length]; });
+
+  const n = skillCols.length;
+  const nLeft = Math.ceil(n / 2);
+  const leftCols = skillCols.slice(0, nLeft);
+  const rightCols = skillCols.slice(nLeft);
+  const rightSlotCount = Math.max(1, rightCols.length);
+
+  let roleChips = "";
+  for (const col of skillCols) {
+    const [bg, text, border] = colColors[col];
+    roleChips += `<span class="role-chip" style="background:${bg};color:${text};border:0.5px solid ${border};">${escapeHtml(col)}</span>\n`;
+  }
+
+  let colHeadsHtml = "";
+  for (const col of leftCols) {
+    const [, text] = colColors[col];
+    colHeadsHtml += `<div class="ch ch-role" style="color:${text};">${escapeHtml(col)}</div>\n`;
+  }
+  colHeadsHtml += '<div class="ch ch-c"></div>\n';
+  for (const col of rightCols) {
+    const [, text] = colColors[col];
+    colHeadsHtml += `<div class="ch ch-role" style="color:${text};">${escapeHtml(col)}</div>\n`;
+  }
+  for (let i = 0; i < rightSlotCount - rightCols.length; i++) colHeadsHtml += '<div class="ch ch-role"></div>\n';
+
+  const gridCols = `repeat(${nLeft},minmax(0,1fr)) 140px repeat(${rightSlotCount},minmax(0,1fr))`;
+
+  let rowsHtml = "";
+  for (const row of rows) {
+    const timeVal = String(row["时间"] ?? "").trim();
+    const mechVal = String(row["机制"] ?? "").trim();
+    const hasMech = !isBlank(mechVal);
+
+    if (hasMech) {
+      const dmgRaw = row["理论伤害"];
+      let dmgDisplay = "—";
+      if (!isBlank(dmgRaw)) {
+        const num = parseFloat(dmgRaw);
+        if (!Number.isNaN(num)) dmgDisplay = Math.trunc(num).toLocaleString("en-US");
+      }
+      for (let i = 0; i < leftCols.length; i++) rowsHtml += '<div class="mc-l"></div>\n';
+      rowsHtml += '<div class="mc-c"><div class="mc">';
+      rowsHtml += `<div class="mc-time">${escapeHtml(timeVal)}</div>`;
+      rowsHtml += `<div class="mc-name">${escapeHtml(mechVal)}</div>`;
+      rowsHtml += `<div class="mc-dmg-label">理论伤害</div>`;
+      rowsHtml += `<div class="mc-dmg-val">${dmgDisplay}</div>`;
+      rowsHtml += "</div></div>\n";
+      for (let i = 0; i < rightCols.length; i++) rowsHtml += '<div class="mc-r"></div>\n';
+      for (let i = 0; i < rightSlotCount - rightCols.length; i++) rowsHtml += '<div class="mc-r"></div>\n';
+    } else {
+      const rowSkills = {};
+      for (const col of skillCols) {
+        const val = row[col];
+        if (!isBlank(val)) rowSkills[col] = String(val).trim();
+      }
+      if (!Object.keys(rowSkills).length) continue;
+
+      for (const col of leftCols) {
+        if (rowSkills[col] !== undefined) {
+          const [bg, text, border] = colColors[col];
+          const tag = `<span class="skill-tag" style="background:${bg};color:${text};border:0.5px solid ${border};">${escapeHtml(rowSkills[col])}</span>`;
+          rowsHtml += `<div class="sk-l">${tag}<span class="dot"></span></div>\n`;
+        } else {
+          rowsHtml += '<div class="sk-empty-l"></div>\n';
+        }
+      }
+      rowsHtml += `<div class="sk-c"><span class="ts">${escapeHtml(timeVal)}</span></div>\n`;
+      for (const col of rightCols) {
+        if (rowSkills[col] !== undefined) {
+          const [bg, text, border] = colColors[col];
+          const tag = `<span class="skill-tag" style="background:${bg};color:${text};border:0.5px solid ${border};">${escapeHtml(rowSkills[col])}</span>`;
+          rowsHtml += `<div class="sk-r"><span class="dot"></span>${tag}</div>\n`;
+        } else {
+          rowsHtml += '<div class="sk-empty-r"></div>\n';
+        }
+      }
+      for (let i = 0; i < rightSlotCount - rightCols.length; i++) rowsHtml += '<div class="sk-empty-r"></div>\n';
+    }
+  }
+
+  return `<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans SC',sans-serif;font-size:13px;background:#fff;color:#111;}
+.doc-header{padding:14px 20px 12px;border-bottom:0.5px solid #e5e7eb;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.doc-title{font-size:15px;font-weight:500;}
+.role-chip{font-size:11px;font-weight:500;padding:2px 9px;border-radius:4px;white-space:nowrap;}
+.tl{display:grid;grid-template-columns:${gridCols};padding:0 16px 40px;}
+.ch{padding:10px 4px 8px;font-size:11px;font-weight:500;color:#374151;border-bottom:0.5px solid #e5e7eb;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ch-c{text-align:center;}
+.sk-l{display:flex;justify-content:flex-end;align-items:center;gap:6px;padding:4px 0;position:relative;}
+.sk-l::after,.sk-empty-l::after{content:'';position:absolute;right:0;top:0;bottom:0;width:1px;background:#e5e7eb;}
+.sk-empty-l{position:relative;}
+.sk-r{display:flex;justify-content:flex-start;align-items:center;gap:6px;padding:4px 0;position:relative;}
+.sk-r::before,.sk-empty-r::before{content:'';position:absolute;left:0;top:0;bottom:0;width:1px;background:#e5e7eb;}
+.sk-empty-r{position:relative;}
+.sk-c{display:flex;align-items:center;justify-content:center;padding:4px 6px;}
+.ts{font-family:'DM Mono',monospace;font-size:10px;color:#9ca3af;white-space:nowrap;}
+.dot{width:5px;height:5px;border-radius:50%;background:#d1d5db;flex-shrink:0;}
+.skill-tag{display:inline-block;padding:1px 8px;border-radius:4px;font-size:12px;font-weight:500;white-space:nowrap;line-height:1.75;}
+.mc-l{position:relative;padding:6px 0;}
+.mc-l::after{content:'';position:absolute;right:0;top:0;bottom:0;width:1px;background:#e5e7eb;}
+.mc-r{position:relative;padding:6px 0;}
+.mc-r::before{content:'';position:absolute;left:0;top:0;bottom:0;width:1px;background:#e5e7eb;}
+.mc-c{padding:6px 8px;}
+.mc{border:0.5px solid #C0DD97;border-top:2px solid #639922;border-radius:6px;background:#fff;padding:8px 12px;text-align:center;}
+.mc-time{font-family:'DM Mono',monospace;font-size:10px;color:#9ca3af;margin-bottom:3px;}
+.mc-name{font-size:13px;font-weight:500;color:#3B6D11;margin-bottom:5px;}
+.mc-dmg-label{font-size:10px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:#9ca3af;margin-bottom:1px;}
+.mc-dmg-val{font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:#111;}
+</style>
+</head>
+<body>
+<div class="doc-header">
+  <span class="doc-title">${escapeHtml(title)}</span>
+  ${roleChips}
+</div>
+<div class="tl">
+  ${colHeadsHtml}
+  ${rowsHtml}
+</div>
+</body>
+</html>`;
+}
+
+// ── CSV / 文件下载工具 ───────────────────────────────────────────────
+function csvEscape(value) {
+  const s = String(value ?? "");
+  if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function downloadBlob(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function fetchWithRetry(url, options, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const response = await fetch(url, options);
+    if (response.status !== 429) return response;
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+  return fetch(url, options);
+}
+
+// ── Vue App ─────────────────────────────────────────────────────────
+createApp({
+  data() {
+    return {
+      apiUrl: "",
+      isLoading: false,
+      loadingStatus: { text: "", color: "blue" },
+      error: "",
+
+      fflogsConfig: { clientId: "", clientSecret: "" },
+      configForm: { clientId: "", clientSecret: "" },
+      configTestStatus: { text: "", color: "gray" },
+      showConfigModal: false,
+      showSettingsModal: false,
+      showHelpModal: false,
+      token: null,
+      tokenExpiresAt: 0,
+
+      apiEvents: [],
+      apiCasts: [],
+      activePlayers: [],
+      checkedEventPlayerIds: {},
+      checkedCastPlayerIds: {},
+
+      dfEvents: null,
+      dfSkills: null,
+      filteredSkillsDf: null,
+      skillOptionGroups: {},
+
+      customCastOrder: [],
+      castOrderManuallyChanged: false,
+      selectedCastOrderIndex: null,
+      dragIndex: null,
+
+      statusEvent: { text: "尚未载入机制时间轴", tone: "danger" },
+      statusSkill: { text: "尚未筛选技能", tone: "danger" },
+      exportTitle: "",
+
+      settings: {
+        windowThreshold: 0.6,
+        enableDotSupport: true,
+        enableAttackSupport: false,
+        includeTheoretical: true,
+        includeActual: true,
+        includeMitigated: true,
+        includeAbsorbed: true,
+      },
+
+      toast: { visible: false, message: "", tone: "" },
+      _toastTimer: null,
+
+      defaultSelectedSkills: DEFAULT_SELECTED_SKILLS,
+    };
+  },
+  computed: {
+    isConfigured() {
+      return !!(this.fflogsConfig.clientId && this.fflogsConfig.clientSecret);
+    },
+    sortedPlayers() {
+      return sortPlayersByRole(this.activePlayers);
+    },
+    skillGroupEntries() {
+      return Object.entries(this.skillOptionGroups);
+    },
+    exportEnabled() {
+      return this.dfEvents !== null && this.filteredSkillsDf !== null;
+    },
+  },
+  mounted() {
+    try {
+      let saved = JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY) || "{}");
+      if (!saved.clientId || !saved.clientSecret) {
+        // 迁移：尝试从本工具的旧存储键读取
+        const legacyTimeline = JSON.parse(localStorage.getItem(LEGACY_TIMELINE_KEY) || "{}");
+        if (legacyTimeline.clientId && legacyTimeline.clientSecret) saved = legacyTimeline;
+      }
+      if (!saved.clientId || !saved.clientSecret) {
+        // 迁移：尝试从"谁是你的最佳搭档"工具的旧存储键读取
+        const legacyPartner = JSON.parse(localStorage.getItem(LEGACY_PARTNER_KEY) || "{}");
+        if (legacyPartner.clientId && legacyPartner.clientSecret) saved = legacyPartner;
+      }
+      if (saved.clientId && saved.clientSecret) {
+        this.fflogsConfig = { clientId: saved.clientId, clientSecret: saved.clientSecret };
+        localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(this.fflogsConfig));
+      }
+    } catch {}
+    if (!this.isConfigured) {
+      this.configForm = { ...this.fflogsConfig };
+      this.showConfigModal = true;
+    }
+  },
+  methods: {
+    // ── 提示 ──────────────────────────────────────────────────────
+    showToast(message, tone = "info") {
+      this.toast = { visible: true, message, tone };
+      clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => { this.toast.visible = false; }, 3200);
+    },
+    jobCn(job) {
+      return JOB_NAME_MAP[job] || job;
+    },
+
+    // ── FFLogs 配置 ───────────────────────────────────────────────
+    openConfigModal() {
+      this.configForm = { ...this.fflogsConfig };
+      this.configTestStatus = { text: "", color: "gray" };
+      this.showConfigModal = true;
+    },
+    closeConfigModal() {
+      if (!this.isConfigured) return;
+      this.showConfigModal = false;
+    },
+    async testFFLogsConnection() {
+      const cid = this.configForm.clientId.trim();
+      const secret = this.configForm.clientSecret.trim();
+      if (!cid || !secret) {
+        this.configTestStatus = { text: "请先填写 Client ID 与 Client Secret", color: "red" };
+        return;
+      }
+      this.configTestStatus = { text: "正在测试连接…", color: "blue" };
+      try {
+        const body = new URLSearchParams({ grant_type: "client_credentials", client_id: cid, client_secret: secret });
+        const resp = await fetchWithRetry(TOKEN_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: body.toString(),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.access_token) {
+          throw new Error(data.message || data.error || `HTTP ${resp.status}`);
+        }
+        this.configTestStatus = { text: "连接成功，凭证有效", color: "green" };
+      } catch (e) {
+        this.configTestStatus = { text: `连接失败：${e.message}`, color: "red" };
+      }
+    },
+    saveFFLogsConfig() {
+      const cid = this.configForm.clientId.trim();
+      const secret = this.configForm.clientSecret.trim();
+      if (!cid || !secret) {
+        this.configTestStatus = { text: "请填写 Client ID 与 Client Secret", color: "red" };
+        return;
+      }
+      this.fflogsConfig = { clientId: cid, clientSecret: secret };
+      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(this.fflogsConfig));
+      this.token = null;
+      this.showConfigModal = false;
+    },
+
+    // ── 鉴权 / GraphQL ────────────────────────────────────────────
+    async ensureToken(force = false) {
+      if (!force && this.token && Date.now() < this.tokenExpiresAt - 60000) return this.token;
+      if (!this.isConfigured) {
+        throw new Error('尚未配置 FFLogs API，请先点击「FFLogs API 配置」填写 Client ID 与 Client Secret。');
+      }
+      const body = new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: this.fflogsConfig.clientId.trim(),
+        client_secret: this.fflogsConfig.clientSecret.trim(),
+      });
+      const resp = await fetchWithRetry(TOKEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const detail = data.message || data.error || `HTTP ${resp.status}`;
+        throw new Error(`FFLogs 鉴权失败：${detail}`);
+      }
+      if (!data.access_token) throw new Error("FFLogs 响应中缺少 access_token，请检查 Client ID / Secret 是否正确");
+      this.token = data.access_token;
+      this.tokenExpiresAt = Date.now() + Number(data.expires_in || 3600) * 1000;
+      return this.token;
+    },
+    async gql(query, variables = {}) {
+      await this.ensureToken();
+      const resp = await fetchWithRetry(GRAPHQL_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ query, variables }),
+      });
+      if (resp.status === 401) {
+        await this.ensureToken(true);
+        return this.gql(query, variables);
+      }
+      const payload = await resp.json();
+      if (payload.errors && payload.errors.length) {
+        throw new Error(payload.errors.map((e) => e.message).join("\n"));
+      }
+      return payload.data;
+    },
+
+    // ── 解析日志 ──────────────────────────────────────────────────
+    translateRows(rows, field, map) {
+      return rows.map((row) => {
+        const raw = (row[field] || "").trim();
+        const translated = map[raw];
+        return translated ? { ...row, [field]: translated } : row;
+      });
+    },
+    async loadDataFromApi() {
+      const url = this.apiUrl.trim();
+      if (!url) { this.showToast("请输入URL", "warn"); return; }
+      if (!this.isConfigured) { this.openConfigModal(); return; }
+
+      this.isLoading = true;
+      this.error = "";
+      this.loadingStatus = { text: "加载中，请稍候...", color: "blue" };
+
+      try {
+        const translationMap = await loadTranslationMap();
+        const hasTranslation = Object.keys(translationMap).length > 0;
+
+        const gqlFn = (q, v) => this.gql(q, v);
+        const { eventResult, castResult, activePlayers } = await getAllFromApi(gqlFn, url);
+
+        this.apiEvents = this.translateRows(eventResult, "Event", translationMap);
+        this.apiCasts = this.translateRows(castResult, "Skill", translationMap);
+        this.activePlayers = activePlayers;
+
+        this.checkedEventPlayerIds = {};
+        this.checkedCastPlayerIds = {};
+        for (const p of activePlayers) {
+          this.checkedEventPlayerIds[p.id] = false;
+          this.checkedCastPlayerIds[p.id] = false;
+        }
+        this.customCastOrder = [];
+        this.castOrderManuallyChanged = false;
+        this.selectedCastOrderIndex = null;
+
+        this.dfEvents = null;
+        this.dfSkills = null;
+        this.filteredSkillsDf = null;
+        this.skillOptionGroups = {};
+
+        this.statusEvent = { text: "机制事件已加载", tone: "success" };
+        this.statusSkill = { text: "技能事件已加载", tone: "success" };
+
+        const hint = hasTranslation ? "在线翻译" : "未获取到在线翻译（离线或加载失败，技能/机制显示为英文原名）";
+        this.loadingStatus = { text: `加载完成（${hint}）`, color: "green" };
+      } catch (e) {
+        this.loadingStatus = { text: "加载失败", color: "red" };
+        this.error = `解析失败：${e.message}`;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    // ── 玩家勾选 ──────────────────────────────────────────────────
+    setAllChecks(target, value) {
+      for (const id in this[target]) this[target][id] = value;
+    },
+    getSelectedCastPlayers() {
+      const ids = new Set(Object.keys(this.checkedCastPlayerIds).filter((id) => this.checkedCastPlayerIds[id]).map(Number));
+      return this.activePlayers.filter((p) => ids.has(p.id));
+    },
+    getDefaultCastOrder(players) {
+      const list = players || this.getSelectedCastPlayers();
+      return sortPlayersByRole(list).map((p) => p.name);
+    },
+    confirmSelectedPlayers() {
+      const selectedEventIds = new Set(Object.keys(this.checkedEventPlayerIds).filter((id) => this.checkedEventPlayerIds[id]).map(Number));
+      const selectedEventNames = this.activePlayers.filter((p) => selectedEventIds.has(p.id)).map((p) => p.name);
+
+      const selectedCastIds = new Set(Object.keys(this.checkedCastPlayerIds).filter((id) => this.checkedCastPlayerIds[id]).map(Number));
+      const selectedCastNames = this.activePlayers.filter((p) => selectedCastIds.has(p.id)).map((p) => p.name);
+
+      if (!selectedEventNames.length) { this.showToast("请至少选择一名用于统计『受伤事件』的角色", "warn"); return; }
+      if (!selectedCastNames.length) { this.showToast("请至少选择一名用于统计『施法事件』的角色", "warn"); return; }
+
+      const eventNameSet = new Set(selectedEventNames);
+      const castNameSet = new Set(selectedCastNames);
+      const filteredEvents = this.apiEvents.filter((row) => eventNameSet.has(row.Target));
+      const filteredCasts = this.apiCasts.filter((row) => castNameSet.has(row.Source));
+
+      const processedRows = processApiData(filteredEvents, {
+        enableDotSupport: this.settings.enableDotSupport,
+        enableAttackSupport: this.settings.enableAttackSupport,
+        includeActual: this.settings.includeActual,
+        includeMitigated: this.settings.includeMitigated,
+        includeTheoretical: this.settings.includeTheoretical,
+        includeAbsorbed: this.settings.includeAbsorbed,
+      });
+
+      this.dfEvents = slidingWindowAggregate(processedRows, this.settings.windowThreshold);
+      this.dfSkills = filteredCasts;
+      this.filteredSkillsDf = null;
+      this.statusSkill = { text: "尚未筛选技能", tone: "danger" };
+
+      this.syncCastOrderWithSelection();
+      this.loadSkills();
+
+      this.showToast(`已筛选 ${this.dfEvents.length} 条事件，${this.dfSkills.length} 条技能`, "success");
+    },
+
+    // ── 导出顺序（拖拽标签）──────────────────────────────────────
+    getPlayerDisplayName(name) {
+      const p = this.activePlayers.find((pl) => pl.name === name);
+      if (!p) return name;
+      return `${name}（${this.jobCn(p.subType)}）`;
+    },
+    syncCastOrderWithSelection() {
+      const selectedPlayers = this.getSelectedCastPlayers();
+      const selectedNames = new Set(selectedPlayers.map((p) => p.name));
+      if (!this.castOrderManuallyChanged) {
+        this.customCastOrder = this.getDefaultCastOrder(selectedPlayers);
+      } else {
+        const defaultOrder = this.getDefaultCastOrder(selectedPlayers);
+        const ordered = this.customCastOrder.filter((n) => selectedNames.has(n));
+        for (const n of defaultOrder) if (!ordered.includes(n)) ordered.push(n);
+        this.customCastOrder = ordered;
+      }
+      this.selectedCastOrderIndex = null;
+    },
+    moveCastOrder(direction) {
+      if (this.selectedCastOrderIndex === null) return;
+      const i = this.selectedCastOrderIndex;
+      const j = i + direction;
+      if (j < 0 || j >= this.customCastOrder.length) return;
+      const arr = this.customCastOrder;
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+      this.castOrderManuallyChanged = true;
+      this.selectedCastOrderIndex = j;
+    },
+    resetCastOrder() {
+      this.customCastOrder = this.getDefaultCastOrder();
+      this.castOrderManuallyChanged = false;
+      this.selectedCastOrderIndex = null;
+    },
+    onChipDragStart(i, ev) {
+      this.dragIndex = i;
+      ev.dataTransfer.effectAllowed = "move";
+    },
+    onChipDrop(i) {
+      if (this.dragIndex === null || this.dragIndex === i) return;
+      const arr = this.customCastOrder;
+      const [moved] = arr.splice(this.dragIndex, 1);
+      arr.splice(i, 0, moved);
+      this.castOrderManuallyChanged = true;
+      this.selectedCastOrderIndex = i;
+      this.dragIndex = null;
+    },
+    getExportSourceOrder(sourceNames) {
+      const sourceSet = new Set(sourceNames);
+      const ordered = this.customCastOrder.filter((n) => sourceSet.has(n));
+      const remaining = [...sourceSet].filter((n) => !ordered.includes(n));
+      ordered.push(...sortSourceNamesByPlayerRole(remaining, this.activePlayers));
+      return ordered;
+    },
+
+    // ── 技能筛选 ──────────────────────────────────────────────────
+    loadSkills() {
+      const bySource = {};
+      for (const row of this.dfSkills) {
+        const source = row.Source || "未知";
+        const skill = (row.Skill || "").trim();
+        if (!skill) continue;
+        if (!bySource[source]) bySource[source] = new Set();
+        bySource[source].add(skill);
+      }
+      const groups = {};
+      for (const [source, skillSet] of Object.entries(bySource)) {
+        const sortedSkills = Array.from(skillSet).sort((a, b) => a.localeCompare(b, "zh-CN"));
+        const skillsObj = {};
+        for (const skill of sortedSkills) skillsObj[skill] = DEFAULT_SELECTED_SKILLS.has(skill);
+        groups[source] = skillsObj;
+      }
+      this.skillOptionGroups = groups;
+    },
+    clearAllCheckboxes() {
+      for (const source in this.skillOptionGroups) {
+        for (const skill in this.skillOptionGroups[source]) {
+          this.skillOptionGroups[source][skill] = false;
+        }
+      }
+    },
+    filterSkills() {
+      const selectedSkills = new Set();
+      for (const source in this.skillOptionGroups) {
+        for (const [skill, checked] of Object.entries(this.skillOptionGroups[source])) {
+          if (checked) selectedSkills.add(skill);
+        }
+      }
+      if (!selectedSkills.size) { this.showToast("请至少选择一个技能", "warn"); return; }
+
+      const selectedCastIds = new Set(Object.keys(this.checkedCastPlayerIds).filter((id) => this.checkedCastPlayerIds[id]).map(Number));
+      const selectedNames = new Set(this.activePlayers.filter((p) => selectedCastIds.has(p.id)).map((p) => p.name));
+
+      const selectedRows = [];
+      for (const row of this.dfSkills) {
+        if (selectedNames.has(row.Source) && selectedSkills.has(row.Skill)) {
+          selectedRows.push({ ...row, 技能: row.Skill || "", 来源: row.Source || "", 时间: row.Time || "" });
+        }
+      }
+      this.filteredSkillsDf = selectedRows;
+      this.statusSkill = { text: `已筛选 ${selectedRows.length} 条技能记录`, tone: "info" };
+    },
+
+    // ── 导出 ──────────────────────────────────────────────────────
+    buildMergedTimelineData() {
+      if (!this.dfEvents) { this.showToast("请先导入机制数据", "error"); return null; }
+      if (!this.filteredSkillsDf) { this.showToast("请先筛选技能", "error"); return null; }
+
+      const eventsBySec = {};
+      for (const row of this.dfEvents) {
+        const timeSec = timeToSeconds(row.Time);
+        const eventRow = { 时间: row.Time, 机制: row.Event };
+        if (this.settings.includeTheoretical) eventRow.理论伤害 = row.Damage ?? "";
+        if (this.settings.includeActual) eventRow.实际伤害 = row.Actual ?? "";
+        if (this.settings.includeAbsorbed) eventRow.吸收伤害 = row.Absorbed ?? "";
+        if (this.settings.includeMitigated) eventRow.减伤 = row.Mitigated ?? "";
+        if (!eventsBySec[timeSec]) eventsBySec[timeSec] = [];
+        eventsBySec[timeSec].push(eventRow);
+      }
+
+      const skillsBySec = {};
+      for (const row of this.filteredSkillsDf) {
+        const timeStr = (row["时间"] || "").trim();
+        if (!timeStr) continue;
+        const timeSec = timeToSeconds(timeStr);
+        const source = (row["来源"] || "").trim();
+        const skill = (row["技能"] || "").trim();
+        if (!skillsBySec[timeSec]) skillsBySec[timeSec] = {};
+        if (!skillsBySec[timeSec][source]) skillsBySec[timeSec][source] = [];
+        skillsBySec[timeSec][source].push(skill);
+      }
+
+      const allTimeSecs = Array.from(new Set([...Object.keys(eventsBySec), ...Object.keys(skillsBySec)].map(Number))).sort((a, b) => a - b);
+
+      const allSourcesSet = new Set();
+      for (const secData of Object.values(skillsBySec)) {
+        for (const src of Object.keys(secData)) allSourcesSet.add(src);
+      }
+      const allSources = this.getExportSourceOrder(allSourcesSet);
+
+      const fieldnames = ["时间", "机制"];
+      if (this.settings.includeTheoretical) fieldnames.push("理论伤害");
+      if (this.settings.includeActual) fieldnames.push("实际伤害");
+      if (this.settings.includeAbsorbed) fieldnames.push("吸收伤害");
+      if (this.settings.includeMitigated) fieldnames.push("减伤");
+      fieldnames.push(...allSources);
+
+      const outputRows = [];
+      for (const sec of allTimeSecs) {
+        const events = eventsBySec[sec] || [null];
+        for (const event of events) {
+          const row = { 时间: formatTime(sec), 机制: "" };
+          if (this.settings.includeTheoretical) row.理论伤害 = "";
+          if (this.settings.includeActual) row.实际伤害 = "";
+          if (this.settings.includeAbsorbed) row.吸收伤害 = "";
+          if (this.settings.includeMitigated) row.减伤 = "";
+
+          if (event) {
+            row.机制 = event.机制;
+            if (this.settings.includeTheoretical) row.理论伤害 = event.理论伤害 ?? "";
+            if (this.settings.includeActual) row.实际伤害 = event.实际伤害 ?? "";
+            if (this.settings.includeAbsorbed) row.吸收伤害 = event.吸收伤害 ?? "";
+            if (this.settings.includeMitigated) row.减伤 = event.减伤 ?? "";
+          }
+
+          if (skillsBySec[sec]) {
+            for (const source of allSources) {
+              const skills = skillsBySec[sec][source];
+              if (skills && skills.length) row[source] = skills.join(" / ");
+            }
+          }
+          outputRows.push(row);
+        }
+      }
+      return { outputRows, fieldnames };
+    },
+    mergeAndExport() {
+      const result = this.buildMergedTimelineData();
+      if (!result) return;
+      const { outputRows, fieldnames } = result;
+      const lines = [fieldnames.map(csvEscape).join(",")];
+      for (const row of outputRows) {
+        lines.push(fieldnames.map((f) => csvEscape(row[f] ?? "")).join(","));
+      }
+      const csvContent = "\ufeff" + lines.join("\r\n");
+      downloadBlob(csvContent, `${this.exportTitle || "时间轴"}.csv`, "text/csv;charset=utf-8");
+      this.showToast("CSV 已导出", "success");
+    },
+    exportHtmlTimeline() {
+      const result = this.buildMergedTimelineData();
+      if (!result) return;
+      const { outputRows, fieldnames } = result;
+      const title = this.exportTitle || "时间轴";
+      const html = buildTimelineHtml(outputRows, fieldnames, title);
+      downloadBlob(html, `${title}.html`, "text/html;charset=utf-8");
+      this.showToast("HTML 时间轴已导出", "success");
+    },
+  },
+}).mount("#app");
+</script>
+</body>
+</html>

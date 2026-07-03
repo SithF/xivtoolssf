@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FFLogs API 申请教程</title>
+  <style>
+    :root { --text: #1a1a1a; --muted: #555; --bg: #f7f7f9; --card: #fff; --accent: #3366cc; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+      color: var(--text);
+      background: var(--bg);
+      margin: 0;
+      padding: 24px 16px 48px;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; margin: 0 0 8px; }
+    .lead { color: var(--muted); margin-bottom: 24px; }
+    section {
+      background: var(--card);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    h2 { font-size: 1.1rem; margin: 0 0 12px; color: var(--accent); }
+    ol, ul { padding-left: 1.25rem; margin: 0; }
+    li { margin-bottom: 8px; }
+    figure { margin: 16px 0 0; }
+    figure img {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    figcaption { font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
+    code { background: #eee; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+    a { color: var(--accent); }
+    .note {
+      background: #fff8e6;
+      border-left: 4px solid #e6a800;
+      padding: 10px 14px;
+      margin-top: 12px;
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>FFLogs API 申请教程</h1>
+    <p class="lead">本教程介绍如何在 FFLogs 上申请 API 密钥，获取 <code>Client ID</code> 和 <code>Client Secret</code>，以便在工具中使用。</p>
+
+    <section>
+      <h2>1. 登录并进入设置</h2>
+      <ol>
+        <li>访问 <a href="https://cn.fflogs.com" target="_blank" rel="noopener">fflogs.com</a> 登录你的账号。</li>
+        <li>点击右上角的头像下拉菜单（步骤 ①），在弹出的用户面板中点击带有齿轮图标的 <strong>设置</strong> 选项（步骤 ②）。</li>
+      </ol>
+      <figure>
+        <img src="images/01.png" alt="点击头像菜单进入设置">
+        <figcaption>图 1：点击右上角头像，再点击「设置」</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>2. 找到 API 客户端管理入口</h2>
+      <ol>
+        <li>在账号设置页面向下滚动，找到 <strong>网页API</strong> 区块。</li>
+        <li>点击其中的链接 <strong>「在此处管理您的V2客户端」</strong>（步骤 ③），进入 V2 API 客户端管理页面。</li>
+      </ol>
+      <figure>
+        <img src="images/02.png" alt="账号设置页面 API 区块">
+        <figcaption>图 2：找到「网页API」区块，点击管理 V2 客户端的链接</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>3. 创建新客户端</h2>
+      <ol>
+        <li>进入 <strong>Manage Your Clients</strong> 页面后，点击右上角的 <strong>+ Create Client</strong> 按钮（步骤 ④）。</li>
+      </ol>
+      <figure>
+        <img src="images/03.png" alt="客户端管理页面">
+        <figcaption>图 3：点击「+ Create Client」创建新的 API 客户端</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>4. 填写客户端信息</h2>
+      <ol>
+        <li>在 <strong>修改你的应用名称</strong> 字段中填入一个便于识别的名称，例如 <code>ff14-timeline-tool</code>（步骤 ⑤，名字随意）。</li>
+        <li>在 <strong>Change your redirect URLs</strong> 字段中填写 <code>http://localhost</code>（步骤 ⑥，填此值即可，不影响使用）。</li>
+        <li>点击 <strong>Change</strong> 按钮提交（步骤 ⑦）。</li>
+      </ol>
+      <figure>
+        <img src="images/04.png" alt="填写客户端名称和回调地址">
+        <figcaption>图 4：填写应用名称和重定向 URL，然后点击「Change」</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2>5. 保存 Client ID 和 Client Secret</h2>
+      <ol>
+        <li>提交成功后，页面会弹出提示框（步骤 ⑧），显示你的 <strong>Client ID</strong> 和 <strong>Client Secret</strong>。</li>
+        <li>请立即将两者复制并妥善保存，填入工具的 FFLogs API 配置对话框中即可使用。</li>
+      </ol>
+      <figure>
+        <img src="images/05.png" alt="成功获取 Client ID 和 Client Secret">
+        <figcaption>图 5：复制弹框中的 Client ID 和 Client Secret</figcaption>
+      </figure>
+      <div class="note">⚠️ <strong>Client Secret 仅在此时显示一次，关闭弹框后将无法再次查看。</strong>如果忘记保存，需要删除该客户端并重新创建。</div>
+    </section>
+
+  </div>
+</body>
+</html>
