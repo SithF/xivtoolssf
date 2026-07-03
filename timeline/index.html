@@ -128,8 +128,8 @@
     display:flex;align-items:center;gap:16px;flex-wrap:wrap;
   }
   .export-bar .statuses{display:flex;gap:16px;flex-wrap:wrap;flex:1;min-width:200px;}
-  .export-bar .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-  .export-bar input[type=text]{flex:1 1 300px;min-width:280px;width:auto;}
+  .export-bar .actions{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;flex:1 1 360px;min-width:0;}
+  .export-bar input[type=text]{flex:1 1 200px;min-width:0;width:auto;}
 
   .modal-mask{
     position:fixed;inset:0;background:rgba(20,24,34,.45);
@@ -324,8 +324,8 @@
     </div>
     <div class="actions">
       <input type="text" v-model.trim="exportTitle" :placeholder="'导出文件名（默认：' + defaultExportName() + '）'">
-      <button :disabled="!exportEnabled" @click="mergeAndExport">导出分析用 CSV 表格</button>
-      <button class="success" :disabled="!exportEnabled" @click="exportHtmlTimeline">导出展示用 HTML 时间轴</button>
+      <button :disabled="!exportEnabled" @click="exportHtmlTimeline">导出展示用 HTML 时间轴</button>
+      <button class="success" :disabled="!exportEnabled" @click="mergeAndExport">导出分析用 CSV 表格</button>
     </div>
   </div>
 
