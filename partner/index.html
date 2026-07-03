@@ -1430,7 +1430,7 @@
         extractCharacterInfo(url) {
           const urlStr = String(url || "");
           
-          // 匹配格式 1: /character/id/19906709
+          // 匹配格式 1: /character/id/123456
           const matchId = urlStr.match(/\/character\/id\/(\d+)/i);
           if (matchId) return { type: 'id', id: Number(matchId[1]) };
 
