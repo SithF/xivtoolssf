@@ -315,6 +315,7 @@
 3. 将生成的 Client ID 与 Client Secret 填入下方并保存
 
 凭证仅保存在你当前浏览器的 localStorage 中，用于向 FFLogs 获取访问令牌，不会上传至本工具之外的任何服务器。</div>
+      <p style="margin:0 0 14px;"><a href="docs/fflogs_api_help/index.html" target="_blank" rel="noopener">📖 查看图文教程：如何申请 FFLogs API →</a></p>
       <label class="field-label">Client ID</label>
       <input type="text" v-model.trim="configForm.clientId" style="margin-bottom:10px;">
       <label class="field-label">Client Secret</label>
@@ -357,6 +358,10 @@
     <div class="modal-box">
       <button class="close-x" @click="showHelpModal=false">✕</button>
       <h2>使用说明</h2>
+      <p style="margin:0 0 12px;display:flex;gap:16px;flex-wrap:wrap;">
+        <a href="docs/fflogs_api_help/index.html" target="_blank" rel="noopener">📖 图文教程：如何申请 FFLogs API →</a>
+        <a href="docs/usage_help/index.html" target="_blank" rel="noopener">📖 图文教程：工具使用说明 →</a>
+      </p>
       <div class="help-text">1. 点击「FFLogs API 配置」，按提示申请并填写 Client ID / Client Secret（一次性，保存在本机浏览器）。
 
 2. 打开 FFLogs 战报页面，复制浏览器地址栏链接，链接需包含具体战斗编号，例如：
