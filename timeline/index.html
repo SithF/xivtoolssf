@@ -174,6 +174,24 @@
 
   a{color:var(--primary);}
 
+  .preset-picker{display:flex;align-items:center;gap:6px;margin-left:auto;font-size:12.5px;color:var(--text-muted);}
+  .preset-picker select{font-family:inherit;font-size:13px;border:1px solid var(--border);border-radius:7px;padding:7px 10px;background:#fff;color:var(--text);cursor:pointer;}
+  .preset-picker select:focus{outline:2px solid var(--primary);outline-offset:1px;}
+
+  .modal-box.preset-manager{max-width:660px;}
+  .pm-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+  .pm-list{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;margin-bottom:14px;}
+  .pm-item{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:8px;padding:8px 12px;background:#fbfbfd;}
+  .pm-item-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
+  .pm-name{font-weight:600;font-size:13px;}
+  .pm-meta{font-size:12px;color:var(--text-muted);}
+  .pm-item-actions{display:flex;gap:6px;flex-shrink:0;}
+  .pm-editor{border-top:1px solid var(--border);padding-top:14px;}
+  .pm-editor h3{font-size:14px;margin:0 0 8px;}
+  .pm-json{width:100%;font-family:'DM Mono',ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;border:1px solid var(--border);border-radius:8px;padding:10px;background:#fff;color:var(--text);resize:vertical;}
+  .pm-json:focus{outline:2px solid var(--primary);outline-offset:1px;}
+  .pm-json-error{color:var(--danger);background:var(--danger-bg);border-radius:6px;padding:8px 10px;font-size:12.5px;margin-top:8px;white-space:pre-wrap;}
+
   .tool-switch-bar{
     position:sticky;top:0;z-index:60;
     display:flex;align-items:center;gap:14px;
@@ -213,6 +231,13 @@
   <div class="toolbar">
     <button @click="showHelpModal=true">0. 帮助</button>
     <button @click="showSettingsModal=true">高级设置</button>
+    <div class="preset-picker">
+      <label for="presetSel">视角预设</label>
+      <select id="presetSel" v-model="presetId" @change="onPresetChange">
+        <option v-for="p in presets" :key="p.id" :value="p.id" v-text="p.name"></option>
+      </select>
+      <button class="small" @click="openPresetManager">管理预设</button>
+    </div>
   </div>
 
   <div class="card" v-if="!isConfigured" style="border-color:#f0c674;background:#fdf3e0;">
@@ -374,6 +399,50 @@
     </div>
   </div>
 
+  <!-- 预设管理弹窗 -->
+  <div class="modal-mask" v-if="showPresetManager" @click.self="closePresetManager">
+    <div class="modal-box preset-manager">
+      <button class="close-x" @click="closePresetManager">✕</button>
+      <h2>预设管理</h2>
+      <div class="pm-toolbar">
+        <button class="primary small" @click="startNewPreset">＋ 新建预设</button>
+        <button class="small" @click="exportPresets">导出全部</button>
+        <button class="small" @click="triggerImport">导入 JSON</button>
+        <button class="small ghost" @click="restoreBuiltinPresets">↺ 恢复默认</button>
+        <input ref="importInput" type="file" accept="application/json,.json" style="display:none" @change="onImportFile">
+      </div>
+      <div class="pm-list">
+        <div class="pm-item" v-for="p in presets" :key="p.id">
+          <div class="pm-item-main">
+            <span class="pm-name" v-text="p.name"></span>
+            <span class="badge badge-info" v-if="p.builtin">内置</span>
+            <span class="badge badge-green" v-if="p.id===presetId">当前</span>
+            <span class="pm-meta" v-text="presetSummary(p)"></span>
+          </div>
+          <div class="pm-item-actions">
+            <button class="small" @click="startEditPreset(p)">编辑</button>
+            <button class="small" @click="exportOnePreset(p)">导出</button>
+            <button class="small ghost" :disabled="p.builtin" @click="deletePreset(p)">删除</button>
+          </div>
+        </div>
+      </div>
+      <div class="pm-editor" v-if="editingPreset || isNewPreset">
+        <h3 v-text="isNewPreset ? '新建预设' : ('编辑：' + (editingPreset ? editingPreset.name : ''))"></h3>
+        <p class="help-text">以 JSON 编辑：name（名称）、roleOrder（职能顺序，取值 tank / healer / dps，靠前的优先）、skills（默认勾选技能名数组）。</p>
+        <textarea class="pm-json" v-model="presetDraftJson" spellcheck="false" rows="14"></textarea>
+        <div class="pm-json-error" v-if="presetJsonError" v-text="presetJsonError"></div>
+        <div class="modal-actions">
+          <button class="primary" @click="saveEditedPreset">保存</button>
+          <button class="small" :disabled="!hasSkillCheckboxes" @click="insertCheckedSkillsIntoDraft">填入当前勾选技能</button>
+          <button class="ghost" @click="cancelEdit">取消</button>
+        </div>
+      </div>
+      <div class="modal-actions" v-else>
+        <button @click="closePresetManager">关闭</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" v-if="toast.visible" :class="toast.tone">{{ toast.message }}</div>
 
 </div>
@@ -414,31 +483,93 @@ const DEFAULT_SELECTED_SKILLS = new Set([
   "抗死", "油性坦培拉", "武装解除",
 ]);
 
+// ── 视角预设（默认勾选技能 + 职能排列顺序）──────────────────────────
+const ROLE_KEYS = ["tank", "healer", "dps"];
+const ROLE_LABELS = { tank: "坦克", healer: "治疗", dps: "输出" };
+const DEFAULT_ROLE_ORDER = ["healer", "tank", "dps"];
+
+// 内置预设（受保护，不可删除，可“恢复默认”）
+const BUILTIN_PRESETS = [
+  { id: "healer", name: "治疗视角（默认）", builtin: true, roleOrder: ["healer", "tank", "dps"], skills: [...DEFAULT_SELECTED_SKILLS] },
+  // T 职视角默认勾选技能
+  { id: "tank", name: "T职视角", builtin: true, roleOrder: ["tank", "healer", "dps"], skills: [
+    "神圣领域", "盾阵", "圣盾阵", "干预", "壁垒", "极致防御", "预警",
+    "死斗", "原初的直觉", "原初的血气", "原初的勇猛", "战栗", "泰然自若", "戮罪", "复仇",
+    "超火流星", "石之心", "刚玉之心", "极光", "伪装", "大星云", "星云",
+    "行尸走肉", "至黑之夜", "献奉", "弃明投暗", "暗影卫", "暗影墙",
+    "雪仇", "铁壁",
+    "诊断", "均衡诊断", "灵橡清汁", "白牛清汁", "输血", "拯救", "混合",
+    "吉星相位", "福星", "先天禀赋", "天星交错", "放浪神之箭", "河流神之瓶", "建筑神之塔", "世界树之干", "擢升",
+    "再生", "救疗", "安慰之心", "神名", "神祝祷", "天赐祝福", "水流幕",
+    "生命活性法", "生命回生法", "显灵之章", "鼓舞激励之策", "以太契约", "深谋远虑之策",
+  ] },
+];
+const DEFAULT_PRESET_ID = "healer";
+const SELECTED_PRESET_STORAGE_KEY = "fflogs_timeline_view_preset_v1";
+const PRESETS_STORAGE_KEY = "fflogs_timeline_presets_v1";
+
+function rolePriorityFromOrder(order) {
+  const rp = {};
+  const list = Array.isArray(order) && order.length ? order : DEFAULT_ROLE_ORDER;
+  list.forEach((role, i) => { if (rp[role] == null) rp[role] = i; });
+  for (const r of ROLE_KEYS) if (rp[r] == null) rp[r] = ROLE_KEYS.length;
+  return rp;
+}
+const DEFAULT_ROLE_PRIORITY = rolePriorityFromOrder(DEFAULT_ROLE_ORDER);
+
+function normalizePreset(raw, fallbackId) {
+  const p = raw && typeof raw === "object" ? raw : {};
+  const id = (typeof p.id === "string" && p.id.trim())
+    ? p.id.trim()
+    : (fallbackId || ("preset_" + Math.random().toString(36).slice(2, 9)));
+  const name = (typeof p.name === "string" && p.name.trim()) ? p.name.trim() : "未命名预设";
+  const seen = new Set();
+  const roleOrder = [];
+  if (Array.isArray(p.roleOrder)) {
+    for (const r of p.roleOrder) if (ROLE_KEYS.includes(r) && !seen.has(r)) { seen.add(r); roleOrder.push(r); }
+  }
+  for (const r of DEFAULT_ROLE_ORDER) if (!seen.has(r)) { seen.add(r); roleOrder.push(r); }
+  const skills = [];
+  const skillSeen = new Set();
+  if (Array.isArray(p.skills)) {
+    for (const s of p.skills) {
+      const sv = String(s == null ? "" : s).trim();
+      if (sv && !skillSeen.has(sv)) { skillSeen.add(sv); skills.push(sv); }
+    }
+  }
+  return { id, name, builtin: !!p.builtin, roleOrder, skills };
+}
+
+function seedBuiltinPresets() {
+  return BUILTIN_PRESETS.map((p) => normalizePreset(p, p.id));
+}
+
 const TIMELINE_FIXED_COLS = new Set(["时间", "机制", "理论伤害", "实际伤害", "吸收伤害", "减伤"]);
 
 // ── 纯函数：排序 / 时间 / 聚合 ────────────────────────────────────────
-function getJobRolePriority(job) {
-  if (HEALER_JOBS.has(job)) return 0;
-  if (TANK_JOBS.has(job)) return 1;
-  if (DPS_JOBS.has(job)) return 2;
+function getJobRolePriority(job, rolePriority) {
+  const rp = rolePriority || DEFAULT_ROLE_PRIORITY;
+  if (HEALER_JOBS.has(job)) return rp.healer;
+  if (TANK_JOBS.has(job)) return rp.tank;
+  if (DPS_JOBS.has(job)) return rp.dps;
   return 3;
 }
 
-function sortPlayersByRole(players) {
+function sortPlayersByRole(players, rolePriority) {
   return players
     .map((p, i) => [p, i])
     .sort((a, b) => {
-      const pa = getJobRolePriority(a[0].subType);
-      const pb = getJobRolePriority(b[0].subType);
+      const pa = getJobRolePriority(a[0].subType, rolePriority);
+      const pb = getJobRolePriority(b[0].subType, rolePriority);
       return pa !== pb ? pa - pb : a[1] - b[1];
     })
     .map((x) => x[0]);
 }
 
-function sortSourceNamesByPlayerRole(sourceNames, players) {
+function sortSourceNamesByPlayerRole(sourceNames, players, rolePriority) {
   const sourceSet = new Set(sourceNames);
   const ordered = [];
-  for (const p of sortPlayersByRole(players)) {
+  for (const p of sortPlayersByRole(players, rolePriority)) {
     if (sourceSet.has(p.name) && !ordered.includes(p.name)) ordered.push(p.name);
   }
   const remaining = [...sourceSet].filter((n) => !ordered.includes(n)).sort();
@@ -730,7 +861,7 @@ async function loadTranslationMap() {
   }
 }
 
-// ── HTML 时间轴导出（对应 timeline_to_html.py 的 build_html）────────��──
+// ── HTML 时间轴导出（对应 timeline_to_html.py 的 build_html）──────────
 function isBlank(v) {
   if (v === null || v === undefined) return true;
   const s = String(v).trim();
@@ -978,15 +1109,33 @@ createApp({
       toast: { visible: false, message: "", tone: "" },
       _toastTimer: null,
 
-      defaultSelectedSkills: DEFAULT_SELECTED_SKILLS,
+      presetId: DEFAULT_PRESET_ID,
+      presets: seedBuiltinPresets(),
+      showPresetManager: false,
+      editingPreset: null,
+      isNewPreset: false,
+      presetDraftJson: "",
+      presetJsonError: "",
     };
   },
   computed: {
     isConfigured() {
       return !!(this.fflogsConfig.clientId && this.fflogsConfig.clientSecret);
     },
+    activePreset() {
+      return this.presets.find((p) => p.id === this.presetId) || this.presets[0] || { id: "", name: "", roleOrder: DEFAULT_ROLE_ORDER.slice(), skills: [...DEFAULT_SELECTED_SKILLS] };
+    },
+    activeRolePriority() {
+      return rolePriorityFromOrder(this.activePreset.roleOrder);
+    },
+    defaultSelectedSkills() {
+      return new Set(this.activePreset.skills || []);
+    },
+    hasSkillCheckboxes() {
+      return Object.keys(this.skillOptionGroups).length > 0;
+    },
     sortedPlayers() {
-      return sortPlayersByRole(this.activePlayers);
+      return sortPlayersByRole(this.activePlayers, this.activeRolePriority);
     },
     skillGroupEntries() {
       return Object.entries(this.skillOptionGroups);
@@ -999,7 +1148,7 @@ createApp({
     try {
       let saved = JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY) || "{}");
       if (!saved.clientId || !saved.clientSecret) {
-        // 迁移：尝试从本工具的旧存储键读��
+        // 迁移：尝试从本工具的旧存储键读
         const legacyTimeline = JSON.parse(localStorage.getItem(LEGACY_TIMELINE_KEY) || "{}");
         if (legacyTimeline.clientId && legacyTimeline.clientSecret) saved = legacyTimeline;
       }
@@ -1012,6 +1161,18 @@ createApp({
         this.fflogsConfig = { clientId: saved.clientId, clientSecret: saved.clientSecret };
         localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(this.fflogsConfig));
       }
+      const storedPresets = JSON.parse(localStorage.getItem(PRESETS_STORAGE_KEY) || "null");
+      if (Array.isArray(storedPresets) && storedPresets.length) {
+        const normalized = storedPresets.map((p) => normalizePreset(p, p && p.id));
+        for (const seed of seedBuiltinPresets()) {
+          const i = normalized.findIndex((p) => p.id === seed.id);
+          if (i < 0) normalized.unshift(seed);
+          else normalized[i].builtin = true;
+        }
+        this.presets = normalized;
+      }
+      const savedId = localStorage.getItem(SELECTED_PRESET_STORAGE_KEY);
+      if (savedId && this.presets.some((p) => p.id === savedId)) this.presetId = savedId;
     } catch {}
   },
   methods: {
@@ -1023,6 +1184,195 @@ createApp({
     },
     jobCn(job) {
       return JOB_NAME_MAP[job] || job;
+    },
+    onPresetChange() {
+      try { localStorage.setItem(SELECTED_PRESET_STORAGE_KEY, this.presetId); } catch {}
+      this.reapplyActivePreset();
+      this.showToast(`已切换到「${this.activePreset.name}」`, "info");
+    },
+    reapplyActivePreset() {
+      // 切换/编辑当前预设后：排列顺序回到预设默认，并在已加载数据时自动重跑筛选
+      this.castOrderManuallyChanged = false;
+      if (this.dfEvents !== null) {
+        const wasFiltered = this.filteredSkillsDf !== null;
+        this.confirmSelectedPlayers();
+        if (wasFiltered) this.filterSkills();
+      } else {
+        this.selectedCastOrderIndex = null;
+      }
+    },
+    // ── 预设管理 ────────────────────────────────
+    savePresets() {
+      try { localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(this.presets)); } catch {}
+    },
+    presetSummary(p) {
+      const order = (p.roleOrder || []).map((r) => ROLE_LABELS[r] || r).join(" > ");
+      return `${order} · ${(p.skills || []).length} 个默认技能`;
+    },
+    openPresetManager() {
+      this.cancelEdit();
+      this.showPresetManager = true;
+    },
+    closePresetManager() {
+      this.cancelEdit();
+      this.showPresetManager = false;
+    },
+    cancelEdit() {
+      this.editingPreset = null;
+      this.isNewPreset = false;
+      this.presetDraftJson = "";
+      this.presetJsonError = "";
+    },
+    presetToEditableJson(preset) {
+      return JSON.stringify({ name: preset.name, roleOrder: preset.roleOrder, skills: preset.skills }, null, 2);
+    },
+    startNewPreset() {
+      this.isNewPreset = true;
+      this.editingPreset = null;
+      this.presetJsonError = "";
+      this.presetDraftJson = this.presetToEditableJson({ name: "新预设", roleOrder: DEFAULT_ROLE_ORDER.slice(), skills: [] });
+    },
+    startEditPreset(preset) {
+      this.isNewPreset = false;
+      this.editingPreset = preset;
+      this.presetJsonError = "";
+      this.presetDraftJson = this.presetToEditableJson(preset);
+    },
+    insertCheckedSkillsIntoDraft() {
+      const checked = [];
+      for (const src in this.skillOptionGroups) {
+        for (const [sk, on] of Object.entries(this.skillOptionGroups[src])) {
+          if (on && !checked.includes(sk)) checked.push(sk);
+        }
+      }
+      if (!checked.length) { this.showToast("当前没有勾选的技能", "warn"); return; }
+      let obj;
+      try { obj = JSON.parse(this.presetDraftJson || "{}"); }
+      catch (e) { this.presetJsonError = "当前 JSON 无法解析，无法填入：" + e.message; return; }
+      const set = new Set(Array.isArray(obj.skills) ? obj.skills.map(String) : []);
+      checked.forEach((s) => set.add(s));
+      obj.skills = [...set];
+      this.presetDraftJson = JSON.stringify(obj, null, 2);
+      this.presetJsonError = "";
+      this.showToast(`已填入 ${checked.length} 个勾选技能`, "success");
+    },
+    validatePresetInput(parsed) {
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return "预设必须是一个 JSON 对象";
+      if (typeof parsed.name !== "string" || !parsed.name.trim()) return "name 不能为空";
+      if (parsed.roleOrder !== undefined) {
+        if (!Array.isArray(parsed.roleOrder) || parsed.roleOrder.some((r) => !ROLE_KEYS.includes(r))) {
+          return 'roleOrder 只能包含 "tank"、"healer"、"dps"';
+        }
+      }
+      if (parsed.skills !== undefined) {
+        if (!Array.isArray(parsed.skills) || parsed.skills.some((s) => typeof s !== "string")) {
+          return "skills 必须是字符串数组";
+        }
+      }
+      return "";
+    },
+    saveEditedPreset() {
+      let parsed;
+      try { parsed = JSON.parse(this.presetDraftJson); }
+      catch (e) { this.presetJsonError = "JSON 解析失败：" + e.message; return; }
+      const err = this.validatePresetInput(parsed);
+      if (err) { this.presetJsonError = err; return; }
+
+      let savedId;
+      if (this.isNewPreset) {
+        const np = normalizePreset({ ...parsed, id: undefined, builtin: false });
+        this.presets.push(np);
+        savedId = np.id;
+        this.presetId = np.id;
+        try { localStorage.setItem(SELECTED_PRESET_STORAGE_KEY, this.presetId); } catch {}
+      } else {
+        const p = this.editingPreset;
+        const np = normalizePreset({ ...parsed, id: p.id, builtin: p.builtin });
+        const idx = this.presets.findIndex((x) => x.id === p.id);
+        if (idx >= 0) this.presets.splice(idx, 1, np);
+        savedId = p.id;
+      }
+      this.savePresets();
+      this.cancelEdit();
+      if (savedId === this.presetId) this.reapplyActivePreset();
+      this.showToast("预设已保存", "success");
+    },
+    deletePreset(preset) {
+      if (preset.builtin) { this.showToast("内置预设不可删除", "warn"); return; }
+      if (this.presets.length <= 1) { this.showToast("至少保留一个预设", "warn"); return; }
+      if (!confirm(`确定删除预设「${preset.name}」？`)) return;
+      const idx = this.presets.findIndex((x) => x.id === preset.id);
+      if (idx < 0) return;
+      this.presets.splice(idx, 1);
+      if (this.editingPreset && this.editingPreset.id === preset.id) this.cancelEdit();
+      if (this.presetId === preset.id) {
+        this.presetId = this.presets[0].id;
+        try { localStorage.setItem(SELECTED_PRESET_STORAGE_KEY, this.presetId); } catch {}
+        this.reapplyActivePreset();
+      }
+      this.savePresets();
+      this.showToast("预设已删除", "success");
+    },
+    restoreBuiltinPresets() {
+      if (!confirm("将把内置预设（治疗视角、T职视角）恢复为初始设置，自定义预设不受影响。确定继续？")) return;
+      for (const seed of seedBuiltinPresets()) {
+        const idx = this.presets.findIndex((x) => x.id === seed.id);
+        if (idx >= 0) this.presets.splice(idx, 1, seed);
+        else this.presets.unshift(seed);
+      }
+      this.savePresets();
+      this.reapplyActivePreset();
+      this.showToast("已恢复内置预设", "success");
+    },
+    exportPresets() {
+      this.downloadPresetsFile(this.presets, "视角预设_全部.json");
+    },
+    exportOnePreset(p) {
+      this.downloadPresetsFile([p], `视角预设_${sanitizeFilename(p.name) || p.id}.json`);
+    },
+    downloadPresetsFile(list, filename) {
+      const payload = {
+        type: "fflogs-timeline-presets",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        presets: list.map((p) => ({ id: p.id, name: p.name, builtin: !!p.builtin, roleOrder: p.roleOrder, skills: p.skills })),
+      };
+      downloadBlob(JSON.stringify(payload, null, 2), filename, "application/json;charset=utf-8");
+      this.showToast("预设已导出", "success");
+    },
+    triggerImport() {
+      const el = this.$refs.importInput;
+      if (el) el.click();
+    },
+    onImportFile(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result);
+          const arr = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.presets) ? parsed.presets : null);
+          if (!arr) throw new Error("文件格式不正确（缺少 presets 数组）");
+          let count = 0;
+          for (const raw of arr) {
+            const idx = raw && raw.id ? this.presets.findIndex((x) => x.id === raw.id) : -1;
+            if (idx >= 0 && !this.presets[idx].builtin) {
+              this.presets.splice(idx, 1, normalizePreset({ ...raw, builtin: false }));
+            } else if (idx >= 0 && this.presets[idx].builtin) {
+              this.presets.push(normalizePreset({ ...raw, id: undefined, builtin: false }));
+            } else {
+              this.presets.push(normalizePreset({ ...raw, builtin: false }));
+            }
+            count += 1;
+          }
+          this.savePresets();
+          this.showToast(`已导入 ${count} 个预设`, "success");
+        } catch (e) {
+          this.showToast("导入失败：" + e.message, "error");
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = "";
     },
 
     // ── 鉴权 / GraphQL ────────────────────────────────────────────
@@ -1069,7 +1419,7 @@ createApp({
       return payload.data;
     },
 
-    // ── 解析日志 ──────────────────────────────────────────────────
+    // ── 解析日志 ─────────────────────────────────────────────────
     translateRows(rows, field, map) {
       return rows.map((row) => {
         const raw = (row[field] || "").trim();
@@ -1136,7 +1486,7 @@ createApp({
     },
     getDefaultCastOrder(players) {
       const list = players || this.getSelectedCastPlayers();
-      return sortPlayersByRole(list).map((p) => p.name);
+      return sortPlayersByRole(list, this.activeRolePriority).map((p) => p.name);
     },
     confirmSelectedPlayers() {
       const selectedEventIds = new Set(Object.keys(this.checkedEventPlayerIds).filter((id) => this.checkedEventPlayerIds[id]).map(Number));
@@ -1224,7 +1574,7 @@ createApp({
       const sourceSet = new Set(sourceNames);
       const ordered = this.customCastOrder.filter((n) => sourceSet.has(n));
       const remaining = [...sourceSet].filter((n) => !ordered.includes(n));
-      ordered.push(...sortSourceNamesByPlayerRole(remaining, this.activePlayers));
+      ordered.push(...sortSourceNamesByPlayerRole(remaining, this.activePlayers, this.activeRolePriority));
       return ordered;
     },
 
@@ -1242,7 +1592,7 @@ createApp({
       for (const [source, skillSet] of Object.entries(bySource)) {
         const sortedSkills = Array.from(skillSet).sort((a, b) => a.localeCompare(b, "zh-CN"));
         const skillsObj = {};
-        for (const skill of sortedSkills) skillsObj[skill] = DEFAULT_SELECTED_SKILLS.has(skill);
+        for (const skill of sortedSkills) skillsObj[skill] = this.defaultSelectedSkills.has(skill);
         groups[source] = skillsObj;
       }
       this.skillOptionGroups = groups;
