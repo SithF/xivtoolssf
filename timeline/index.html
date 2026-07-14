@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>奶轴复盘助手</title>
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="./xlsx.full.min.js"></script>
 <style>
   :root{
     --bg:#f5f6f8;
@@ -350,7 +351,7 @@
     <div class="actions">
       <input type="text" v-model.trim="exportTitle" :placeholder="'导出文件名（默认：' + defaultExportName() + '）'">
       <button :disabled="!exportEnabled" @click="exportHtmlTimeline">导出展示用 HTML 时间轴</button>
-      <button class="success" :disabled="!exportEnabled" @click="mergeAndExport">导出分析用 CSV 表格</button>
+      <button class="success" :disabled="!exportEnabled" @click="mergeAndExport">导出分析用 Excel 表格</button>
     </div>
   </div>
 
@@ -392,7 +393,7 @@
         <li>粘贴链接后点击 <strong>「1. 解析日志」</strong>，等待加载完成。</li>
         <li>在 <strong>「受伤统计对象」</strong> 和 <strong>「施法统计对象」</strong> 中分别勾选需要统计的角色，点击 <strong>「2. 确认筛选玩家」</strong>。</li>
         <li>在 <strong>「技能筛选」</strong> 中勾选需要展示在时间轴上的技能（蓝色高亮为常用技能，已默认勾选），点击 <strong>「3. 筛选所选技能」</strong>。</li>
-        <li>点击底部按钮导出 CSV 表格或 HTML 时间轴。</li>
+        <li>点击底部按钮导出 Excel 表格或 HTML 时间轴。</li>
       </ol>
       <p class="help-note"><span>🔒</span><span>所有数据处理均在你的浏览器本地完成，不会上传到本工具之外的任何服务器。</span></p>
       <div class="modal-actions"><button @click="showHelpModal=false">关闭</button></div>
@@ -861,7 +862,7 @@ async function loadTranslationMap() {
   }
 }
 
-// ── HTML 时间轴导出（对应 timeline_to_html.py 的 build_html）──────────
+// ── HTML 时间轴导出 ──────────
 function isBlank(v) {
   if (v === null || v === undefined) return true;
   const s = String(v).trim();
@@ -1148,7 +1149,7 @@ createApp({
     try {
       let saved = JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY) || "{}");
       if (!saved.clientId || !saved.clientSecret) {
-        // 迁移：尝试从本工具的旧存储键读
+        // 迁移：尝试从本工具的旧存储键读取
         const legacyTimeline = JSON.parse(localStorage.getItem(LEGACY_TIMELINE_KEY) || "{}");
         if (legacyTimeline.clientId && legacyTimeline.clientSecret) saved = legacyTimeline;
       }
@@ -1712,15 +1713,19 @@ createApp({
     mergeAndExport() {
       const result = this.buildMergedTimelineData();
       if (!result) return;
-      const { outputRows, fieldnames } = result;
-      const lines = [fieldnames.map(csvEscape).join(",")];
-      for (const row of outputRows) {
-        lines.push(fieldnames.map((f) => csvEscape(row[f] ?? "")).join(","));
+      if (typeof XLSX === "undefined") {
+        this.showToast("未找到 xlsx.full.min.js，请将其与本页面放在同一目录后重试", "error");
+        return;
       }
-      const csvContent = "\ufeff" + lines.join("\r\n");
+      const { outputRows, fieldnames } = result;
+      const aoa = [fieldnames.slice()];
+      for (const row of outputRows) aoa.push(fieldnames.map((f) => row[f] ?? ""));
       const fileName = sanitizeFilename(this.exportTitle) || this.defaultExportName();
-      downloadBlob(csvContent, `${fileName}.csv`, "text/csv;charset=utf-8");
-      this.showToast("CSV 已导出", "success");
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "时间轴");
+      XLSX.writeFile(wb, `${fileName}.xlsx`);
+      this.showToast("Excel 已导出", "success");
     },
     exportHtmlTimeline() {
       const result = this.buildMergedTimelineData();
